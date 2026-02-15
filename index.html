@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>みどりす（スイカ？）ゲーム</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #dcedc8; /* パステルグリーン */
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: none; 
+            user-select: none;
+            color: #33691e;
+        }
+
+        #app-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            height: 100%;
+            max-height: 700px;
+            background-color: #f1f8e9;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+            border-radius: 4px;
+        }
+
+        /* --- 画面共通 --- */
+        .screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 20;
+            transition: opacity 0.3s;
+        }
+
+        /* --- スタート画面 --- */
+        #start-screen { background-color: #dcedc8; z-index: 30; }
+        
+        h1 {
+            font-size: 24px; /* タイトルが長くなったので少し小さく調整 */
+            margin-bottom: 10px;
+            color: #2e7d32;
+            text-shadow: 2px 2px 0 #fff;
+            white-space: nowrap; /* 改行させない */
+        }
+
+        .input-area {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        #username {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 2px solid #558b2f;
+            width: 200px;
+            text-align: center;
+            background-color: #fff;
+            color: #33691e;
+        }
+
+        .ranking-box {
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 15px;
+            width: 85%;
+            text-align: center;
+            margin-bottom: 20px;
+            border: 2px solid #558b2f;
+            max-height: 40%;
+            overflow-y: auto;
+        }
+
+        .ranking-list {
+            list-style: none; padding: 0; margin: 10px 0 0 0;
+            font-size: 14px;
+        }
+
+        .ranking-list li {
+            padding: 8px 0;
+            border-bottom: 1px dashed #a5d6a7;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .rank-name { font-weight: bold; color: #33691e; }
+        .rank-score { color: #2e7d32; font-weight: bold; }
+        .rank-1 { color: #d4af37; text-shadow: 1px 1px 0 #fff; }
+
+        /* --- UI --- */
+        #game-ui {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 10;
+        }
+        .header-bar {
+            display: flex; justify-content: space-between; align-items: flex-start; padding: 10px 15px;
+        }
+        .score-display {
+            background: rgba(255, 255, 255, 0.9); padding: 5px 15px;
+            border-radius: 20px; border: 2px solid #558b2f; 
+            font-weight: bold; font-size: 20px; color: #2e7d32;
+        }
+        .next-box {
+            background: rgba(255, 255, 255, 0.9); padding: 5px;
+            border-radius: 10px; border: 2px solid #558b2f; 
+            text-align: center; width: 50px; color: #2e7d32;
+        }
+        .next-box img { width: 30px; height: 30px; object-fit: contain; }
+        
+        #retire-btn {
+            pointer-events: auto; background-color: #8d6e63; color: white; border: none;
+            padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 14px; margin-top: 10px;
+            box-shadow: 0 3px 0 #5d4037;
+        }
+        #retire-btn:active { transform: translateY(3px); box-shadow: none; }
+
+        /* --- 結果画面 --- */
+        #result-screen {
+            display: none; background: rgba(0, 50, 0, 0.85);
+            color: white;
+            backdrop-filter: blur(5px);
+        }
+
+        .big-btn {
+            padding: 15px 40px; font-size: 20px; cursor: pointer;
+            background-color: #9ccc65;
+            border: none; border-radius: 50px;
+            color: #fff; font-weight: bold; box-shadow: 0 5px 0 #689f38;
+            transition: transform 0.1s; pointer-events: auto;
+            text-shadow: 1px 1px 0 rgba(0,0,0,0.2);
+        }
+        .big-btn:active { transform: translateY(5px); box-shadow: none; }
+        .big-btn:disabled { background-color: #ccc; box-shadow: none; cursor: not-allowed; }
+
+        #loading-msg { font-size: 12px; color: #558b2f; }
+
+        /* --- キャンバス設定 (余白修正) --- */
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+        canvas {
+            display: block; /* これで下部の余白が消えます */
+            width: 100%;
+            height: 100%;
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    
+    <div id="start-screen" class="screen">
+        <h1>みどりす（スイカ？）ゲーム</h1>
+        
+        <div class="input-area">
+            <input type="text" id="username" placeholder="名前を入力 (必須)" maxlength="8">
+        </div>
+
+        <div class="ranking-box">
+            <div style="color: #2e7d32; font-weight:bold;">🍃 TOP 5 RANKING 🍃</div>
+            <div id="loading-msg">Loading...</div>
+            <ul class="ranking-list" id="ranking-list">
+                </ul>
+        </div>
+
+        <button class="big-btn" id="start-btn">START</button>
+    </div>
+
+    <div id="game-ui">
+        <div class="header-bar">
+            <div style="pointer-events: auto;">
+                <div class="score-display">Score: <span id="current-score">0</span></div>
+                <button id="retire-btn">あきらめる</button>
+            </div>
+            <div class="next-box">
+                <div style="font-size:10px;">NEXT</div>
+                <img id="next-fruit-img" src="" alt="">
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="result-screen" class="screen">
+        <h2 id="result-title">GAME OVER</h2>
+        <p style="font-size: 24px;">Score: <span id="final-score">0</span></p>
+        <p style="font-size: 14px; color:#a5d6a7;">Saving to ranking...</p>
+        <button class="big-btn" id="retry-btn">タイトルへ</button>
+    </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
+<script type="module">
+    // ---------------------------------------------------------
+    //  ★重要★ ここをご自身のFirebase設定に書き換えてください
+    // ---------------------------------------------------------
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+    apiKey: "AIzaSyBDm197WJCFHz9ri9jRX4quCjHRvh80vqI",
+    authDomain: "midorisu-marge.firebaseapp.com",
+    projectId: "midorisu-marge",
+    storageBucket: "midorisu-marge.firebasestorage.app",
+    messagingSenderId: "550690090899",
+    appId: "1:550690090899:web:8ac7899aa8b8a507ce8266"
+    };
+    // Firebase初期化
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const SCORES_COLLECTION = "scores"; 
+
+    // ---------------------------------------------------------
+    //  Firebase 処理
+    // ---------------------------------------------------------
+    async function fetchRanking() {
+        const list = document.getElementById('ranking-list');
+        const loading = document.getElementById('loading-msg');
+        list.innerHTML = '';
+        loading.style.display = 'block';
+
+        try {
+            const q = query(collection(db, SCORES_COLLECTION), orderBy("score", "desc"), limit(5));
+            const querySnapshot = await getDocs(q);
+            
+            loading.style.display = 'none';
+            let rank = 1;
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                const li = document.createElement('li');
+                const rankClass = rank === 1 ? 'rank-1' : '';
+                li.innerHTML = `
+                    <span class="${rankClass}">#${rank} <span class="rank-name">${escapeHtml(data.name)}</span></span>
+                    <span class="rank-score">${data.score}</span>
+                `;
+                list.appendChild(li);
+                rank++;
+            });
+            if(rank === 1) list.innerHTML = '<li style="text-align:center; color:#888;">No Data</li>';
+        } catch (e) {
+            console.error("Error:", e);
+            loading.innerText = "Error loading ranking.";
+        }
+    }
+
+    async function saveScoreToFirebase(name, score) {
+        try {
+            await addDoc(collection(db, SCORES_COLLECTION), {
+                name: name, score: score, date: serverTimestamp()
+            });
+        } catch (e) {
+            console.error("Error saving:", e);
+            alert("スコア保存失敗: Config設定や通信を確認してください");
+        }
+    }
+
+    function escapeHtml(str) {
+        if(!str) return 'No Name';
+        return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+    }
+
+    window.fetchRanking = fetchRanking;
+    window.saveAndFinish = async (score) => {
+        const name = document.getElementById('username').value || "NoName";
+        await saveScoreToFirebase(name, score);
+        window.backToTitle();
+    };
+
+    fetchRanking();
+
+    // ---------------------------------------------------------
+    //  ゲームロジック
+    // ---------------------------------------------------------
+   // const BASE_URL = "https://placehold.co";
+    //const FRUITS = [
+    //    { level: 0, radius: 15, score: 0,   img: `${BASE_URL}/30x30/c8e6c9/1b5e20?text=1` },
+   //     { level: 1, radius: 25, score: 10,  img: `${BASE_URL}/50x50/a5d6a7/1b5e20?text=2` },
+   //     { level: 2, radius: 35, score: 30,  img: `${BASE_URL}/70x70/81c784/1b5e20?text=3` },
+    //    { level: 3, radius: 45, score: 60,  img: `${BASE_URL}/90x90/66bb6a/ffffff?text=4` },
+    //    { level: 4, radius: 60, score: 100, img: `${BASE_URL}/120x120/4caf50/ffffff?text=5` },
+   //     { level: 5, radius: 75, score: 150, img: `${BASE_URL}/150x150/43a047/ffffff?text=6` },
+    //    { level: 6, radius: 90, score: 300, img: `${BASE_URL}/180x180/2e7d32/ffffff?text=7` },
+    //    { level: 7, radius: 110, score: 500, img: `${BASE_URL}/220x220/1b5e20/ffffff?text=8` },
+    //];
+    const FRUITS = [
+    // レベル0（一番小さい）
+    { level: 0, radius: 15, score: 0,   img: "level1.png" },
+
+    // レベル1
+    { level: 1, radius: 25, score: 10,  img: "level2.png" },
+
+    // レベル2
+    { level: 2, radius: 35, score: 30,  img: "level3.png" },
+
+    // レベル3
+    { level: 3, radius: 45, score: 60,  img: "level4.png" },
+
+    // レベル4
+    { level: 4, radius: 60, score: 100, img: "level5.png" },
+
+    // レベル5
+    { level: 5, radius: 75, score: 150, img: "level6.png" },
+
+    // レベル6
+    { level: 6, radius: 90, score: 300, img: "level7.png" },
+
+    // レベル7（一番大きい）
+    { level: 7, radius: 110, score: 500, img: "level8.png" },
+    ];
+    FRUITS.forEach(f => { const i = new Image(); i.src = f.img; });
+
+    const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
+    
+    let engine, render, runner;
+    let currentScore = 0;
+    let isPlaying = false;
+    let currentFruit = null;
+    let nextFruitLevel = 0;
+    let canDrop = true;
+    let overflowTimer = 0;
+
+    const container = document.getElementById('app-container');
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    const startBtn = document.getElementById('start-btn');
+    const usernameInput = document.getElementById('username');
+    //const savedName = localStorage.getItem('suika_username');
+    //if(savedName) usernameInput.value = savedName;
+
+    startBtn.addEventListener('click', () => {
+        const name = usernameInput.value.trim();
+        if(!name) { alert("名前を入力してください！"); return; }
+        localStorage.setItem('suika_username', name);
+        startGame();
+    });
+
+    function initPhysics() {
+        engine = Engine.create();
+        render = Render.create({
+            element: document.getElementById('canvas-container'),
+            engine: engine,
+            options: { width, height, wireframes: false, background: 'transparent', pixelRatio: window.devicePixelRatio }
+        });
+
+        // 壁設定
+        const wallOpts = { isStatic: true, render: { fillStyle: '#8d6e63' } };
+        Composite.add(engine.world, [
+            Bodies.rectangle(width/2, height, width, 60, wallOpts), // 地面
+            Bodies.rectangle(0, height/2, 10, height, wallOpts), // 左壁
+            Bodies.rectangle(width, height/2, 10, height, wallOpts) // 右壁
+        ]);
+
+        Render.run(render);
+        runner = Runner.create();
+        Runner.run(runner, engine);
+        
+        Events.on(engine, 'collisionStart', handleCollisions);
+        Events.on(engine, 'afterUpdate', checkGameOverCondition);
+    }
+
+    function startGame() {
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('result-screen').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'block';
+
+        currentScore = 0;
+        document.getElementById('current-score').innerText = "0";
+        isPlaying = true;
+        canDrop = true;
+        
+        if (!engine) {
+            initPhysics();
+        } else {
+            Composite.allBodies(engine.world).forEach(body => {
+                if (!body.isStatic || body.label === 'ready') Composite.remove(engine.world, body);
+            });
+            Runner.run(runner, engine);
+        }
+        setNextFruit();
+        spawnReadyFruit();
+    }
+
+    async function finishGame(reason) {
+        if (!isPlaying) return;
+        isPlaying = false;
+        Runner.stop(runner);
+
+        document.getElementById('game-ui').style.display = 'none';
+        const resultScreen = document.getElementById('result-screen');
+        resultScreen.style.display = 'flex';
+        
+        document.getElementById('result-title').innerText = reason === 'retire' ? "FINISHED" : "GAME OVER";
+        document.getElementById('final-score').innerText = currentScore;
+        
+        const name = usernameInput.value || "Anonymous";
+        await window.saveAndFinish(currentScore);
+    }
+
+        window.backToTitle = function() {
+        document.getElementById('result-screen').style.display = 'none';
+        document.getElementById('start-screen').style.display = 'flex';
+        
+        // ★追加：入力欄をリセットする
+        document.getElementById('username').value = ""; 
+
+        fetchRanking();
+    };
+    document.getElementById('retire-btn').addEventListener('click', () => {
+        if(confirm("終了してスコアを記録しますか？")) finishGame('retire');
+    });
+    
+    document.getElementById('retry-btn').addEventListener('click', () => window.backToTitle());
+
+    function setNextFruit() {
+        nextFruitLevel = Math.floor(Math.random() * 3);
+        document.getElementById('next-fruit-img').src = FRUITS[nextFruitLevel].img;
+    }
+
+    function spawnReadyFruit() {
+        if (!isPlaying) return;
+        const info = FRUITS[nextFruitLevel];
+        currentFruit = Bodies.circle(width / 2, 50, info.radius, {
+            label: "ready", isStatic: true, collisionFilter: { mask: 0 },
+            render: { sprite: { texture: info.img, xScale: 1, yScale: 1 } }
+        });
+        fixTextureScale(currentFruit, info);
+        Composite.add(engine.world, currentFruit);
+        canDrop = true;
+    }
+
+    function dropFruit() {
+        if (!canDrop || !currentFruit || !isPlaying) return;
+        canDrop = false;
+        const { x, y } = currentFruit.position;
+        const level = nextFruitLevel;
+        Composite.remove(engine.world, currentFruit);
+        currentFruit = null;
+        Composite.add(engine.world, createFruitBody(x, y, level));
+        setNextFruit();
+        setTimeout(spawnReadyFruit, 800);
+    }
+
+    function createFruitBody(x, y, level) {
+        const info = FRUITS[level];
+        const body = Bodies.circle(x, y, info.radius, {
+            label: `fruit_${level}`, restitution: 0.2, friction: 0.1,
+            render: { sprite: { texture: info.img, xScale: 1, yScale: 1 } }
+        });
+        fixTextureScale(body, info);
+        return body;
+    }
+
+    function fixTextureScale(body, info) {
+        const img = new Image(); img.src = info.img;
+        const apply = (w) => {
+            if(w > 0) {
+                const s = (info.radius * 2.05) / w;
+                body.render.sprite.xScale = s; body.render.sprite.yScale = s;
+            }
+        };
+        img.complete ? apply(img.width) : img.onload = () => apply(img.width);
+    }
+
+    const gameArea = document.getElementById('app-container');
+    function handleMove(cx) {
+        if (!canDrop || !currentFruit || !isPlaying) return;
+        const r = currentFruit.circleRadius;
+        const rect = gameArea.getBoundingClientRect();
+        const x = Math.max(10+r, Math.min(cx - rect.left, width-10-r));
+        Body.setPosition(currentFruit, { x, y: 50 });
+    }
+    gameArea.addEventListener('mousemove', e => handleMove(e.clientX));
+    gameArea.addEventListener('touchmove', e => { e.preventDefault(); handleMove(e.touches[0].clientX); }, { passive: false });
+    
+    const handleEnd = (e) => { if(e.target.tagName !== 'BUTTON') dropFruit(); };
+    gameArea.addEventListener('click', handleEnd);
+    gameArea.addEventListener('touchend', handleEnd);
+
+    function handleCollisions(e) {
+        const pairs = e.pairs;
+        for (let i = 0; i < pairs.length; i++) {
+            const { bodyA, bodyB } = pairs[i];
+            if (bodyA.label.includes('fruit_') && bodyB.label.includes('fruit_')) {
+                if (bodyA.label === bodyB.label && !bodyA.isRemoving && !bodyB.isRemoving) {
+                    const level = parseInt(bodyA.label.split('_')[1]);
+                    if (level < FRUITS.length - 1) {
+                        bodyA.isRemoving = true; bodyB.isRemoving = true;
+                        Composite.remove(engine.world, [bodyA, bodyB]);
+                        Composite.add(engine.world, createFruitBody((bodyA.position.x+bodyB.position.x)/2, (bodyA.position.y+bodyB.position.y)/2, level+1));
+                        currentScore += FRUITS[level+1].score;
+                        document.getElementById('current-score').innerText = currentScore;
+                    }
+                }
+            }
+        }
+    }
+
+    function checkGameOverCondition() {
+        if (!isPlaying) return;
+        let overflow = false;
+        Composite.allBodies(engine.world).forEach(b => {
+            if (b.label.includes('fruit_') && !b.isStatic && b.position.y < 100 && b.speed < 0.2) overflow = true;
+        });
+        if (overflow) {
+            overflowTimer++;
+            if (overflowTimer > 100) finishGame('gameover');
+        } else {
+            overflowTimer = 0;
+        }
+    }
+</script>
+</body>
+</html>
